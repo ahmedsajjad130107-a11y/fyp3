@@ -18,7 +18,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../src/theme';
 import { getItineraryById, SavedItinerary, saveFeedback } from '../src/services/storage';
 import { calculateFare, FareResponse, ServiceFare } from '../src/services/fareApi';
-import { calculateBudget, BudgetResponse } from '../src/services/budgetApi';
 import RawJSONViewer from '../src/components/RawJSONViewer';
 import WeatherCard from '../src/components/WeatherCard';
 import TravelOptions from '../src/components/TravelOptions';
@@ -388,10 +387,6 @@ export default function ItineraryDetailScreen() {
   const [fareData, setFareData]       = useState<FareResponse | null>(null);
   const [fareLoading, setFareLoading] = useState(false);
 
-  // Budget data
-  const [budgetData, setBudgetData]       = useState<BudgetResponse | null>(null);
-  const [budgetLoading, setBudgetLoading] = useState(false);
-
   useEffect(() => { loadItinerary(); }, [itineraryId]);
 
   // Fetch fares when itinerary with departure city is loaded
@@ -411,28 +406,6 @@ export default function ItineraryDetailScreen() {
         .catch(() => setFareData(null))
         .finally(() => setFareLoading(false));
     }
-  }, [itinerary]);
-
-  // Fetch budget when itinerary loads
-  useEffect(() => {
-    if (!itinerary) return;
-    const dest = itinerary.request.destination_city;
-    if (!dest) return;
-    const rawLevel = (itinerary.request.budget_level || 'medium').toLowerCase();
-    const level: 'low' | 'medium' | 'high' =
-      rawLevel.includes('low') ? 'low' : rawLevel.includes('high') ? 'high' : 'medium';
-    setBudgetLoading(true);
-    calculateBudget({
-      destination_city: dest,
-      origin_city: itinerary.request.departure_city || undefined,
-      budget_level: level,
-      num_days: itinerary.response.days?.length || 3,
-      num_people: itinerary.request.num_of_people || 1,
-      travel_date: itinerary.request.travel_date || undefined,
-    })
-      .then(setBudgetData)
-      .catch(() => setBudgetData(null))
-      .finally(() => setBudgetLoading(false));
   }, [itinerary]);
 
   useEffect(() => {
@@ -584,13 +557,13 @@ export default function ItineraryDetailScreen() {
             <Ionicons name="calendar-outline" size={12} color="rgba(255,255,255,0.8)" />
             <Text style={styles.headerPillText}>{response.days?.length ?? 0} days</Text>
           </View>
-          {response.num_spots_considered && (
+          {(response.num_spots_considered ?? 0) > 0 && (
             <View style={styles.headerPill}>
               <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.8)" />
               <Text style={styles.headerPillText}>{response.num_spots_considered} spots</Text>
             </View>
           )}
-          {response.total_estimated_cost && (
+          {(response.total_estimated_cost ?? 0) > 0 && (
             <View style={[styles.headerPill, styles.headerPillGold]}>
               <Text style={styles.headerPillGoldText}>
                 PKR {response.total_estimated_cost?.toLocaleString()}
@@ -784,7 +757,7 @@ export default function ItineraryDetailScreen() {
                 {response.transport_costs.total_cost?.toLocaleString()} {response.currency}
               </Text>
             </View>
-            {response.transport_costs.total_distance && (
+            {(response.transport_costs.total_distance ?? 0) > 0 && (
               <View style={styles.transportRow}>
                 <Text style={styles.transportLabel}>Total Distance</Text>
                 <Text style={styles.transportValue}>
@@ -847,7 +820,7 @@ export default function ItineraryDetailScreen() {
                       style={[
                         styles.fareCard,
                         !f.is_available && styles.fareCardUnavail,
-                        f.is_available && `${f.service} ${f.category}` === fareData.cheapest_service && styles.fareCardBest,
+                        !!f.is_available && `${f.service} ${f.category}` === fareData.cheapest_service && styles.fareCardBest,
                       ]}
                     >
                       <Text style={styles.fareCardIcon}>{f.icon}</Text>
@@ -860,7 +833,7 @@ export default function ItineraryDetailScreen() {
                       ) : (
                         <Text style={styles.fareCardNA}>N/A</Text>
                       )}
-                      {f.is_available && `${f.service} ${f.category}` === fareData.cheapest_service && (
+                      {!!f.is_available && `${f.service} ${f.category}` === fareData.cheapest_service && (
                         <Text style={styles.fareCardBestLabel}>Best</Text>
                       )}
                     </View>
@@ -878,173 +851,6 @@ export default function ItineraryDetailScreen() {
                 </Text>
               </>
             )}
-          </SectionCard>
-        )}
-
-        {/* ── Comprehensive Budget Planner ── */}
-        {(budgetLoading || budgetData) && (
-          <SectionCard title="💰 Budget Planner">
-            {budgetLoading && (
-              <ActivityIndicator size="small" color={GREEN} style={{ marginVertical: 12 }} />
-            )}
-            {budgetData && !budgetLoading && (() => {
-              const b = budgetData;
-              return (
-                <>
-                  {/* Header row */}
-                  <View style={styles.bpHeader}>
-                    <View style={styles.bpLevelBadge}>
-                      <Text style={styles.bpLevelText}>
-                        {b.budget_level.charAt(0).toUpperCase() + b.budget_level.slice(1)} Budget
-                      </Text>
-                    </View>
-                    {b.is_peak_season && (
-                      <View style={styles.bpPeakBadge}>
-                        <Ionicons name="flame-outline" size={11} color="#C62828" />
-                        <Text style={styles.bpPeakText}>Peak Season</Text>
-                      </View>
-                    )}
-                    <Text style={styles.bpDays}>{b.num_days}d · {b.num_people} pax</Text>
-                  </View>
-
-                  {/* Note if intercity transport included */}
-                  {b.totals.transport > 0 && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                      <Ionicons name="information-circle-outline" size={13} color={theme.colors.textSecondary} />
-                      <Text style={{ fontSize: 11, color: theme.colors.textSecondary, flex: 1 }}>
-                        Includes intercity travel cost. Itinerary total above covers local expenses only.
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Grand total strip */}
-                  <View style={styles.bpTotalStrip}>
-                    <View>
-                      <Text style={styles.bpTotalLabel}>Total Budget</Text>
-                      <Text style={styles.bpTotalAmount}>
-                        PKR {b.totals.grand_total.toLocaleString()}
-                      </Text>
-                    </View>
-                    <View style={styles.bpPerPersonBox}>
-                      <Text style={styles.bpPerPersonLabel}>Per Person</Text>
-                      <Text style={styles.bpPerPersonAmount}>
-                        PKR {b.totals.per_person.toLocaleString()}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Cost breakdown grid */}
-                  <Text style={styles.bpSectionLabel}>Cost Breakdown</Text>
-                  <View style={styles.bpBreakGrid}>
-                    {[
-                      { icon: 'bed-outline', label: 'Hotel', val: b.totals.accommodation },
-                      { icon: 'car-outline', label: 'Transport', val: b.totals.transport },
-                      { icon: 'restaurant-outline', label: 'Food', val: b.totals.food },
-                      { icon: 'ticket-outline', label: 'Activities', val: b.totals.activities },
-                    ].map((item) => (
-                      <View key={item.label} style={styles.bpBreakCell}>
-                        <View style={styles.bpBreakIcon}>
-                          <Ionicons name={item.icon as any} size={16} color={GREEN} />
-                        </View>
-                        <Text style={styles.bpBreakLabel}>{item.label}</Text>
-                        <Text style={styles.bpBreakVal}>
-                          PKR {item.val.toLocaleString()}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  {/* Contingency row */}
-                  <View style={styles.bpContingencyRow}>
-                    <Ionicons name="shield-outline" size={13} color={GREEN} />
-                    <Text style={styles.bpContingencyText}>
-                      10% contingency buffer: PKR {b.totals.contingency.toLocaleString()}
-                    </Text>
-                  </View>
-
-                  {/* Recommended hotel */}
-                  <Text style={styles.bpSectionLabel}>Recommended Hotel</Text>
-                  <View style={styles.bpHotelCard}>
-                    <View style={styles.bpHotelTop}>
-                      <Ionicons name="star" size={14} color="#D4AF37" />
-                      <Text style={styles.bpHotelName} numberOfLines={1}>{b.recommended_hotel.name}</Text>
-                      {b.recommended_hotel.is_peak_priced && (
-                        <View style={styles.bpPeakBadge}>
-                          <Text style={styles.bpPeakText}>Peak</Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.bpHotelStats}>
-                      <View style={styles.bpHotelStat}>
-                        <Text style={styles.bpHotelStatLabel}>Per Night</Text>
-                        <Text style={styles.bpHotelStatVal}>
-                          PKR {b.recommended_hotel.price_per_night.toLocaleString()}
-                        </Text>
-                      </View>
-                      <View style={styles.bpHotelStat}>
-                        <Text style={styles.bpHotelStatLabel}>{b.num_days} Nights</Text>
-                        <Text style={styles.bpHotelStatVal}>
-                          PKR {b.recommended_hotel.price_total.toLocaleString()}
-                        </Text>
-                      </View>
-                      <View style={styles.bpHotelStat}>
-                        <Text style={styles.bpHotelStatLabel}>Per Person</Text>
-                        <Text style={styles.bpHotelStatVal}>
-                          PKR {b.recommended_hotel.price_per_person.toLocaleString()}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Other hotel options */}
-                  {b.hotels.length > 1 && (
-                    <>
-                      <Text style={styles.bpSectionLabel}>All Hotel Options</Text>
-                      {b.hotels.map((h, i) => (
-                        <View key={i} style={styles.bpHotelRow}>
-                          <View style={styles.bpHotelTierDot} />
-                          <Text style={styles.bpHotelRowName} numberOfLines={1}>{h.name}</Text>
-                          <Text style={styles.bpHotelRowPrice}>PKR {h.price_per_night.toLocaleString()}/night</Text>
-                        </View>
-                      ))}
-                    </>
-                  )}
-
-                  {/* Food breakdown */}
-                  <Text style={styles.bpSectionLabel}>Daily Food ({b.food.label})</Text>
-                  <View style={styles.bpFoodGrid}>
-                    {[
-                      { label: 'Breakfast', val: b.food.breakfast },
-                      { label: 'Lunch', val: b.food.lunch },
-                      { label: 'Dinner', val: b.food.dinner },
-                      { label: 'Snacks', val: b.food.snacks },
-                    ].map((item) => (
-                      <View key={item.label} style={styles.bpFoodCell}>
-                        <Text style={styles.bpFoodLabel}>{item.label}</Text>
-                        <Text style={styles.bpFoodVal}>PKR {item.val.toLocaleString()}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  <View style={styles.bpFoodTotal}>
-                    <Text style={styles.bpFoodTotalLabel}>PKR {b.food.daily_per_person.toLocaleString()} / person / day</Text>
-                    <Text style={styles.bpFoodTotalAll}>Total Food: PKR {b.food.total.toLocaleString()}</Text>
-                  </View>
-
-                  {/* Savings tips */}
-                  {b.savings_tips.length > 0 && (
-                    <>
-                      <Text style={styles.bpSectionLabel}>💡 Money-Saving Tips</Text>
-                      {b.savings_tips.map((tip, i) => (
-                        <View key={i} style={styles.bpTipRow}>
-                          <View style={styles.bpTipDot} />
-                          <Text style={styles.bpTipText}>{tip}</Text>
-                        </View>
-                      ))}
-                    </>
-                  )}
-                </>
-              );
-            })()}
           </SectionCard>
         )}
 
@@ -1518,49 +1324,6 @@ const styles = StyleSheet.create({
   fareCheapestStrip:{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#D4AF3718', borderRadius: 10, padding: 10, marginBottom: 8 },
   fareCheapestText: { fontSize: 13, color: '#7A5800', fontWeight: '600', flex: 1 },
   fareDisclaimer:   { fontSize: 11, color: theme.colors.textSecondary, fontStyle: 'italic', textAlign: 'center' },
-
-  // Budget Planner
-  bpHeader:        { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  bpLevelBadge:    { backgroundColor: GREEN + '18', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  bpLevelText:     { fontSize: 12, fontWeight: '700', color: GREEN },
-  bpPeakBadge:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFEBEE', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  bpPeakText:      { fontSize: 11, fontWeight: '600', color: '#C62828' },
-  bpDays:          { marginLeft: 'auto' as any, fontSize: 12, color: theme.colors.textSecondary, fontWeight: '500' },
-  bpTotalStrip:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: GREEN, borderRadius: 14, padding: 16, marginBottom: 16 },
-  bpTotalLabel:    { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '600', marginBottom: 3 },
-  bpTotalAmount:   { fontSize: 22, fontWeight: '800', color: '#fff' },
-  bpPerPersonBox:  { alignItems: 'flex-end' },
-  bpPerPersonLabel:{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 3 },
-  bpPerPersonAmount:{ fontSize: 16, fontWeight: '700', color: '#D4AF37' },
-  bpSectionLabel:  { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 14, marginBottom: 8 },
-  bpBreakGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  bpBreakCell:     { width: '47%', backgroundColor: theme.colors.background, borderRadius: 12, padding: 12, alignItems: 'center', gap: 4 },
-  bpBreakIcon:     { width: 36, height: 36, borderRadius: 10, backgroundColor: GREEN + '12', alignItems: 'center', justifyContent: 'center' },
-  bpBreakLabel:    { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600' },
-  bpBreakVal:      { fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary },
-  bpContingencyRow:{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: GREEN + '0D', borderRadius: 10, padding: 10, marginBottom: 4 },
-  bpContingencyText:{ fontSize: 12, color: GREEN, fontWeight: '500', flex: 1 },
-  bpHotelCard:     { backgroundColor: '#D4AF3710', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#D4AF3744', marginBottom: 4 },
-  bpHotelTop:      { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  bpHotelName:     { flex: 1, fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary },
-  bpHotelStats:    { flexDirection: 'row', gap: 8 },
-  bpHotelStat:     { flex: 1, alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, padding: 10 },
-  bpHotelStatLabel:{ fontSize: 10, color: theme.colors.textSecondary, marginBottom: 3 },
-  bpHotelStatVal:  { fontSize: 13, fontWeight: '700', color: GREEN },
-  bpHotelRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  bpHotelTierDot:  { width: 8, height: 8, borderRadius: 4, backgroundColor: GREEN + '60' },
-  bpHotelRowName:  { flex: 1, fontSize: 13, color: theme.colors.textPrimary },
-  bpHotelRowPrice: { fontSize: 12, fontWeight: '600', color: GREEN },
-  bpFoodGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  bpFoodCell:      { flex: 1, minWidth: '45%', backgroundColor: theme.colors.background, borderRadius: 10, padding: 10 },
-  bpFoodLabel:     { fontSize: 11, color: theme.colors.textSecondary, marginBottom: 2 },
-  bpFoodVal:       { fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary },
-  bpFoodTotal:     { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingHorizontal: 4 },
-  bpFoodTotalLabel:{ fontSize: 12, color: GREEN, fontWeight: '600' },
-  bpFoodTotalAll:  { fontSize: 12, color: theme.colors.textSecondary },
-  bpTipRow:        { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
-  bpTipDot:        { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D4AF37', marginTop: 6, flexShrink: 0 },
-  bpTipText:       { flex: 1, fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19 },
 
   // Map
   mapHint: {

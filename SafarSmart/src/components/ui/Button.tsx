@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import {
   GestureResponderEvent,
   StyleProp,
@@ -16,6 +16,8 @@ type Size = 'sm' | 'md' | 'lg';
 
 type Props = {
   title: string;
+  /** Shown after the title (e.g. Ionicons). Prefer this over Unicode arrows on Android. */
+  rightIcon?: ReactNode;
   onPress?: (e: GestureResponderEvent) => void;
   disabled?: boolean;
   loading?: boolean;
@@ -27,6 +29,7 @@ type Props = {
 
 export const Button: React.FC<Props> = ({
   title,
+  rightIcon,
   onPress,
   disabled,
   loading,
@@ -36,6 +39,7 @@ export const Button: React.FC<Props> = ({
   fullWidth = true,
 }) => {
   const isDisabled = disabled || loading;
+  const textStyle = [styles.text, styles[`text_${variant}`], styles[`textSize_${size}`]];
 
   return (
     <TouchableOpacity
@@ -56,10 +60,13 @@ export const Button: React.FC<Props> = ({
           size="small"
           color={variant === 'outline' || variant === 'ghost' ? theme.colors.primary : '#fff'}
         />
+      ) : rightIcon ? (
+        <View style={styles.titleRow}>
+          <Text style={[...textStyle, styles.titleRowText]}>{title}</Text>
+          <View style={styles.rightIconSlot}>{rightIcon}</View>
+        </View>
       ) : (
-        <Text style={[styles.text, styles[`text_${variant}`], styles[`textSize_${size}`]]}>
-          {title}
-        </Text>
+        <Text style={textStyle}>{title}</Text>
       )}
     </TouchableOpacity>
   );
@@ -71,6 +78,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: theme.borderRadius.md,
     borderWidth: 0,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: '100%',
+  },
+  titleRowText: {
+    flexShrink: 1,
+  },
+  rightIconSlot: {
+    marginLeft: 8,
   },
   fullWidth: {
     width: '100%',

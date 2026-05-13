@@ -894,7 +894,12 @@ export default function GenerateItineraryScreen() {
               {error && <ErrorBanner message={error} />}
 
               <Button
-                title={optionsLoading ? 'Fetching options…' : 'Get Hotel & Transport Options →'}
+                title={optionsLoading ? 'Fetching options...' : 'Get Hotel & Transport Options'}
+                rightIcon={
+                  optionsLoading ? undefined : (
+                    <Ionicons name="arrow-forward" size={20} color="#fff" />
+                  )
+                }
                 onPress={handleGetOptions}
                 disabled={optionsLoading || !originCity.trim() || !destinationCity.trim()}
                 loading={optionsLoading}
@@ -971,7 +976,12 @@ export default function GenerateItineraryScreen() {
               {error && <ErrorBanner message={error} />}
 
               <Button
-                title={itineraryLoading ? 'Generating your itinerary…' : 'Generate Itinerary →'}
+                title={itineraryLoading ? 'Generating your itinerary...' : 'Generate Itinerary'}
+                rightIcon={
+                  itineraryLoading ? undefined : (
+                    <Ionicons name="arrow-forward" size={20} color="#fff" />
+                  )
+                }
                 onPress={handleGenerateItinerary}
                 disabled={itineraryLoading || selectedHotelIndex === null || selectedTransportIndex === null}
                 loading={itineraryLoading}

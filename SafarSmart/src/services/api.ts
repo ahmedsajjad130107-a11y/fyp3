@@ -1,5 +1,25 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { API_BASE_URL } from './apiConfig';
+
+/** User-facing text when the device cannot reach the backend (down, wrong URL, firewall, etc.). */
+function apiUnreachableMessage(): string {
+  return `Cannot reach the server at ${API_BASE_URL}. Start the backend from the project’s backend folder (for example: python run_server.py), or set EXPO_PUBLIC_API_URL to your API URL and restart Expo.`;
+}
+
+function throwFromAxios(error: AxiosError, fallback: string): never {
+  const detail = error.response?.data as { detail?: unknown } | undefined;
+  if (detail?.detail != null) {
+    const d = detail.detail;
+    if (typeof d === 'string') throw new Error(d);
+    if (Array.isArray(d)) {
+      const parts = d.map((item: { msg?: string }) => item?.msg).filter(Boolean);
+      if (parts.length) throw new Error(parts.join(' '));
+    }
+  }
+  if (error.response) throw new Error(error.message || fallback);
+  if (error.request) throw new Error(apiUnreachableMessage());
+  throw new Error(error.message || fallback);
+}
 
 export interface ItineraryRequest {
   destination_city: string;
@@ -143,10 +163,7 @@ export async function registerUser(request: AuthRequest): Promise<AuthResponse> 
     return response.data;
   } catch (error: any) {
     console.error('[API] registerUser FAILED:', error.code, error.message, error.response?.status);
-    if (axios.isAxiosError(error)) {
-      const msg = error.response?.data?.detail || error.message || 'Registration failed';
-      throw new Error(msg);
-    }
+    if (axios.isAxiosError(error)) throwFromAxios(error, 'Registration failed');
     throw error;
   }
 }
@@ -176,10 +193,7 @@ export async function loginUser(request: AuthRequest): Promise<AuthResponse> {
     return response.data;
   } catch (error: any) {
     console.error('[API] loginUser FAILED:', error.code, error.message, error.response?.status);
-    if (axios.isAxiosError(error)) {
-      const msg = error.response?.data?.detail || error.message || 'Login failed';
-      throw new Error(msg);
-    }
+    if (axios.isAxiosError(error)) throwFromAxios(error, 'Login failed');
     throw error;
   }
 }

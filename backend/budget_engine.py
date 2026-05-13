@@ -277,6 +277,11 @@ async def get_transport_options(
 
 # ── Cost estimate ─────────────────────────────────────────────────────────────
 
+# ── Cost estimate ─────────────────────────────────────────────────────────────
+
+import math
+
+
 def calculate_estimated_cost(
     hotel: HotelOption,
     transport: TransportOption,
@@ -284,14 +289,53 @@ def calculate_estimated_cost(
     num_travelers: int,
 ) -> EstimatedCostResponse:
     """
-    Compute total = hotel.price_per_night * num_days + transport.total_price.
-    Activities and food are intentionally excluded.
+    Estimate trip cost using:
+
+    • Hotel pricing = per room per night
+    • Transport pricing = one-way per traveler
+    • Transport total is converted to round-trip
+    • Activities and food are excluded
+
+    Assumptions:
+    • 1 hotel room accommodates up to 2 travelers
+    • Hotel nights = max(1, num_days - 1)
     """
-    accommodation_cost = hotel.price_per_night * num_days
-    total = round(accommodation_cost + transport.total_price, 2)
+
+    # Prevent invalid values
+    num_days = max(1, num_days)
+    num_travelers = max(1, num_travelers)
+
+    # Travel industry standard:
+    # 3-day trip usually means 2 hotel nights
+    num_nights = max(1, num_days - 1)
+
+    # Assume 2 travelers per room
+    num_rooms = math.ceil(num_travelers / 2)
+
+    # Hotel cost (per room pricing)
+    accommodation_cost = (
+        hotel.price_per_night
+        * num_nights
+        * num_rooms
+    )
+
+    # Transport.total_price currently represents:
+    # one-way total group fare
+    transport_cost = transport.total_price * 2
+
+    total = round(
+        accommodation_cost + transport_cost,
+        2,
+    )
+
     return EstimatedCostResponse(
         selected_hotel=hotel,
         selected_transport=transport,
         total_estimated_cost=total,
-        note="⚠️ Activities and food are not included in this estimate",
+        note=(
+            "⚠️ Activities and food are not included in this estimate. "
+            "Hotel cost is based on shared room occupancy "
+            "(2 travelers per room). "
+            "Transport cost includes round-trip travel."
+        ),
     )

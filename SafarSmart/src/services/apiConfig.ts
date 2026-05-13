@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
  */
 
 // ⚠️ UPDATE THIS when you restart ngrok:
-const NGROK_URL = 'https://brownnose-eagle-marry.ngrok-free.dev';
+const NGROK_URL = 'https://humility-emcee-lake.ngrok-free.dev';
 
 
 const getApiBaseUrl = () => {
