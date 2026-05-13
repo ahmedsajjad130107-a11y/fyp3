@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, FlatList, StyleSheet } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  FlatList,
+  StyleSheet,
+  TextInput,
+} from 'react-native';
 import { theme } from '../../theme';
 
 interface SelectOption {
@@ -14,6 +22,10 @@ interface SelectProps {
   onValueChange: (value: string) => void;
   placeholder?: string;
   style?: any;
+
+  searchable?: boolean;
+  sortAlphabetically?: boolean;
+  searchPlaceholder?: string;
 }
 
 export const Select: React.FC<SelectProps> = ({
@@ -23,19 +35,50 @@ export const Select: React.FC<SelectProps> = ({
   onValueChange,
   placeholder = 'Select an option',
   style,
+
+  searchable = false,
+  sortAlphabetically = false,
+  searchPlaceholder,
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
+  const [query, setQuery] = useState('');
 
   const selectedOption = options.find((opt) => opt.value === value);
+
+  // reset search when opening modal
+  const openModal = () => {
+    setQuery('');
+    setModalVisible(true);
+  };
+
+  // sorting
+  const sortedOptions = useMemo(() => {
+    if (!sortAlphabetically) return options;
+    return [...options].sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  }, [options, sortAlphabetically]);
+
+  // filtering
+  const filteredOptions = useMemo(() => {
+    if (!searchable || query.trim() === '') return sortedOptions;
+
+    return sortedOptions.filter((item) =>
+      item.label.toLowerCase().includes(query.toLowerCase()),
+    );
+  }, [sortedOptions, query, searchable]);
 
   return (
     <View style={[styles.container, style]}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <TouchableOpacity
-        onPress={() => setModalVisible(true)}
-        style={styles.selectButton}
-      >
-        <Text style={[styles.selectText, !selectedOption && styles.placeholder]}>
+
+      <TouchableOpacity onPress={openModal} style={styles.selectButton}>
+        <Text
+          style={[
+            styles.selectText,
+            !selectedOption && styles.placeholder,
+          ]}
+        >
           {selectedOption ? selectedOption.label : placeholder}
         </Text>
         <Text style={styles.arrow}>▼</Text>
@@ -54,14 +97,31 @@ export const Select: React.FC<SelectProps> = ({
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{label || 'Select'}</Text>
+              <Text style={styles.modalTitle}>
+                {label || 'Select'}
+              </Text>
+
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
             </View>
+
+            {searchable && (
+              <View style={styles.searchContainer}>
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={searchPlaceholder || 'Search...'}
+                  style={styles.searchInput}
+                  placeholderTextColor={theme.colors.textSecondary}
+                />
+              </View>
+            )}
+
             <FlatList
-              data={options}
+              data={filteredOptions}
               keyExtractor={(item) => item.value}
+              keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[
@@ -76,12 +136,16 @@ export const Select: React.FC<SelectProps> = ({
                   <Text
                     style={[
                       styles.optionText,
-                      value === item.value && styles.optionTextSelected,
+                      value === item.value &&
+                        styles.optionTextSelected,
                     ]}
                   >
                     {item.label}
                   </Text>
-                  {value === item.value && <Text style={styles.checkmark}>✓</Text>}
+
+                  {value === item.value && (
+                    <Text style={styles.checkmark}>✓</Text>
+                  )}
                 </TouchableOpacity>
               )}
             />
@@ -125,6 +189,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.textSecondary,
   },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -153,6 +218,19 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: theme.colors.textSecondary,
   },
+
+  searchContainer: {
+    padding: 10,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    color: theme.colors.textPrimary,
+  },
+
   option: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -180,4 +258,3 @@ const styles = StyleSheet.create({
 });
 
 export default Select;
-

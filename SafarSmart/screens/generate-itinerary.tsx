@@ -840,6 +840,8 @@ export default function GenerateItineraryScreen() {
                   onValueChange={setOriginCity}
                   placeholder="Select your departure city"
                   style={styles.inputSpacing}
+                  searchable
+                  sortAlphabetically
                 />
                 <Select
                   label="Destination City *"
@@ -847,6 +849,8 @@ export default function GenerateItineraryScreen() {
                   options={PAKISTANI_CITIES}
                   onValueChange={setDestinationCity}
                   placeholder="Select your destination city"
+                  searchable
+                  sortAlphabetically
                 />
               </Card>
         
