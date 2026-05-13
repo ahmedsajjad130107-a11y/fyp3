@@ -49,5 +49,5 @@ export const PAKISTANI_CITIES = [
   { label: 'Abbottabad', value: 'Abbottabad' },
   { label: 'Mansehra', value: 'Mansehra' },
   { label: 'Haripur', value: 'Haripur' },
-];
+].sort((a, b) => a.label.localeCompare(b.label));
 

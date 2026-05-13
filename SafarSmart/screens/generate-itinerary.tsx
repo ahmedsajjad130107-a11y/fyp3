@@ -205,6 +205,10 @@ function TransportCard({ option, selected, onPress }: {
     </TouchableOpacity>
   );
 }
+
+
+
+
 const tc = StyleSheet.create({
   card: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 2, borderColor: theme.colors.border, ...theme.shadows.sm },
   cardSelected: { borderColor: GREEN, backgroundColor: GREEN + '06' },
@@ -482,13 +486,21 @@ export default function GenerateItineraryScreen() {
     if (type.includes('bus')) {
       return `https://bookkaru.com/bus/listing?from=${from}&to=${to}&date=${dateParam}`;
     }
+
     if (type.includes('train')) {
       return 'https://www.pakrailways.gov.pk/train';
     }
-    if (provider.includes('indrive') || type.includes('car') || type.includes('ride')) {
+
+    if (type.includes('flight')) {
+      return 'https://www.google.com/travel/flights';
+    }
+
+    if (type.includes('car') || type.includes('ride') || provider.includes('indrive')) {
       return 'https://indrive.com/';
     }
-    return 'https://indrive.com/';
+
+    // safe fallback (NOT inDrive)
+    return 'https://www.google.com/travel';
   };
 
   const getSupportedCities = (option: TransportOption): string[] | null => {
@@ -659,9 +671,26 @@ export default function GenerateItineraryScreen() {
 
   // ── Step 1 → Step 2: Fetch options ───────────────────────────────────
   const handleGetOptions = async () => {
-    if (!originCity.trim()) { setError('Origin city is required'); return; }
-    if (!destinationCity.trim()) { setError('Destination city is required'); return; }
-    if (numDays < 1 || numDays > 30) { setError('Number of days must be 1–30'); return; }
+    if (!originCity.trim()) {
+      setError('Origin city is required');
+      return;
+    }
+
+    if (!destinationCity.trim()) {
+      setError('Destination city is required');
+      return;
+    }
+
+    if (originCity.trim().toLowerCase() === destinationCity.trim().toLowerCase()) {
+      setError('Origin and destination cities cannot be the same');
+      return;
+    }
+
+    if (numDays < 1 || numDays > 30) {
+      setError('Number of days must be 1–30');
+      return;
+    }
+
     setError(null);
     setOptionsLoading(true);
     try {
@@ -779,10 +808,12 @@ export default function GenerateItineraryScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
         <ScrollView
+          key={phase}
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
             phase === 'itinerary' && styles.scrollContentItinerary,
+            
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -818,6 +849,7 @@ export default function GenerateItineraryScreen() {
                   placeholder="Select your destination city"
                 />
               </Card>
+        
 
               {/* Days & Travelers */}
               <Card style={styles.card}>
@@ -952,100 +984,105 @@ export default function GenerateItineraryScreen() {
             <>
               {/* Hero: full-bleed image + "Trip to" + destination, back button (no top gap) */}
               <View style={[styles.heroWrapper, styles.heroWrapperNoGap]}>
-                {itinerary.days[0]?.image_url ? (
-                  <Image source={{ uri: itinerary.days[0].image_url }} style={styles.heroImage} resizeMode="cover" />
+                {itinerary.days[itinerary.days.length - 1]?.image_url ? (
+                  <Image
+                    source={{ uri: itinerary.days[itinerary.days.length - 1].image_url }}
+                    style={styles.heroImage}
+                    resizeMode="cover"
+                  />
                 ) : (
-                  <View style={[styles.heroImagePlaceholder, { backgroundColor: cityTheme.bg }]} />
+                  <View
+                    style={[
+                      styles.heroImagePlaceholder,
+                      { backgroundColor: cityTheme.bg },
+                    ]}
+                  />
                 )}
+
                 <View style={styles.heroOverlay} />
+
                 <TouchableOpacity
                   style={styles.heroBackBtn}
-                  onPress={() => { setPhase('selecting'); setError(null); }}
+                  onPress={() => {
+                    setPhase('selecting');
+                    setError(null);
+                  }}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="arrow-back" size={22} color="#333" />
                 </TouchableOpacity>
+
                 <View style={styles.heroTitleBlock}>
                   <Text style={styles.heroTripTo}>Trip to</Text>
-                  <Text style={styles.heroDestination}>{destinationCity || 'Your Destination'}</Text>
+                  <Text style={styles.heroDestination}>
+                    {destinationCity || 'Your Destination'}
+                  </Text>
                 </View>
               </View>
 
-              {/* Trip Details card — timeline: Day 1, Day 2… tap to expand day plan */}
-              <Card style={styles.tripDetailsCard}>
-                <View style={styles.tripDetailsHeader}>
-                  <Text style={styles.tripDetailsTitle}>Trip Details</Text>
-                  <View style={styles.tripDetailsDuration}>
-                    <Text style={styles.tripDetailsDurationText}>Duration ≈ {itinerary.days.length} Days</Text>
-                  </View>
-                </View>
-                <View style={styles.timeline}>
-                  {itinerary.days.map((day, idx) => {
-                    const isFirst = idx === 0;
-                    const isExpanded = expandedTimelineDay === day.day_number;
-                    return (
-                      <View key={day.day_number} style={styles.timelineRowWrap}>
-                        <TouchableOpacity
-                          style={styles.timelineRow}
-                          onPress={() => setExpandedTimelineDay((prev) => (prev === day.day_number ? null : day.day_number))}
-                          activeOpacity={0.85}
-                        >
-                          <View style={styles.timelineLeft}>
-                            <Text style={styles.timelineDate}>{formatTimelineDate(travelDate, day.day_number - 1)}</Text>
-                            <View style={[styles.timelineDot, isFirst && styles.timelineDotActive]} />
-                            {idx < itinerary.days.length - 1 && <View style={styles.timelineLine} />}
-                          </View>
-                          <View style={styles.timelineRight}>
-                            {day.image_url ? (
-                              <Image source={{ uri: day.image_url }} style={styles.timelineThumb} resizeMode="cover" />
-                            ) : (
-                              <View style={[styles.timelineThumbPlaceholder, { backgroundColor: cityTheme.accent + '40' }]}>
-                                <Text style={styles.timelineThumbEmoji}>{cityTheme.emoji}</Text>
-                              </View>
-                            )}
-                            <View style={styles.timelineBody}>
-                              <Text style={styles.timelinePlaceName} numberOfLines={2}>Day {day.day_number}</Text>
-                              <View style={styles.timelineMeta}>
-                                <Ionicons name="location-outline" size={12} color={theme.colors.textSecondary} />
-                                <Text style={styles.timelineLocation}>{destinationCity}</Text>
-                              </View>
-                              <View style={styles.timelineMeta}>
-                                <Ionicons name="paper-plane-outline" size={12} color={GREEN} />
-                                <Text style={styles.timelineDistance}>—</Text>
-                              </View>
-                              <View style={styles.timelineExpandHint}>
-                                <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={theme.colors.textSecondary} />
-                                <Text style={styles.timelineExpandHintText}>{isExpanded ? 'Hide plan' : 'View day plan'}</Text>
-                              </View>
-                            </View>
-                          </View>
-                        </TouchableOpacity>
-                        {isExpanded && (
-                          <View style={styles.timelineDayPlan}>
-                            <Text style={styles.timelineDayPlanHotel}>🏨 {day.hotel}</Text>
-                            {day.activities.map((act, i) => {
-                              const mapsUrl = getActivityMapUrl(act, i, day.activity_locations);
-                              return (
-                                <View key={i} style={styles.timelineDayPlanActivity}>
-                                  <Text style={styles.timelineDayPlanBullet}>•</Text>
-                                  <Text style={styles.timelineDayPlanText}>{act}</Text>
-                                  <TouchableOpacity
-                                    style={styles.timelineMapBtn}
-                                    onPress={() => Linking.openURL(mapsUrl)}
-                                    activeOpacity={0.7}
-                                  >
-                                    <Ionicons name="location" size={14} color={GREEN} />
-                                  </TouchableOpacity>
-                                </View>
-                              );
-                            })}
-                          </View>
-                        )}
+
+              {/* Day-by-day plan */}
+              {itinerary.days.map((day) => {
+                const isExpanded = expandedDays[day.day_number] ?? true;
+                return (
+                  <Card key={day.day_number} style={styles.card}>
+                    <TouchableOpacity
+                      style={styles.dayHeaderRow}
+                      activeOpacity={0.8}
+                      onPress={() =>
+                        setExpandedDays((prev) => ({ ...prev, [day.day_number]: !isExpanded }))
+                      }
+                    >
+                      <Text style={styles.dayTitle}>{day.title}</Text>
+                      <View style={styles.dayHeaderMeta}>
+                        <Text style={styles.dayActivityCount}>{day.activities.length} stops</Text>
+                        <Ionicons
+                        
+                          name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                          size={18}
+                          color={theme.colors.textSecondary}
+                        />
                       </View>
-                    );
-                  })}
-                </View>
-              </Card>
+                    </TouchableOpacity>
+                    {isExpanded ? (
+                      <>
+                        {day.image_url ? (
+                          <TouchableOpacity
+                            activeOpacity={0.85}
+                            onPress={() => Linking.openURL(day.image_url!)}
+                          >
+                            <Image
+                              source={{ uri: day.image_url }}
+                              style={styles.dayImage}
+                              resizeMode="cover"
+                            />
+                            <Text style={styles.tapHint}>Tap image to view full size</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        <Text style={styles.dayHotel}>🏨 Staying at: {day.hotel}</Text>
+                        {day.activities.map((act, i) => {
+                          const mapsUrl = getActivityMapUrl(act, i, day.activity_locations);
+                          return (
+                            <View key={i} style={styles.activityRow}>
+                              <Text style={styles.activityBullet}>•</Text>
+                              <Text style={[styles.activityText, { flex: 1 }]}>{act}</Text>
+                              <TouchableOpacity
+                                style={styles.mapBtn}
+                                onPress={() => Linking.openURL(mapsUrl)}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons name="location" size={16} color={GREEN} />
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      <Text style={styles.dayCollapsedText}>Tap to expand day details.</Text>
+                    )}
+                  </Card>
+                );
+              })}
 
               <CostSummaryCard itinerary={itinerary} numDays={numDays} />
               {itinerary.weather_considerations ? (
@@ -1053,10 +1090,8 @@ export default function GenerateItineraryScreen() {
               ) : null}
 
               <Card style={styles.card}>
-                <SectionTitle label="🌤️ Daily Weather Forecast" />
-                <Text style={styles.weatherSubtitle}>
-                  {weatherLocationLabel ? `Forecast for ${weatherLocationLabel}` : 'Forecast'}
-                </Text>
+                <SectionTitle label="🌤️ Live weather forecast for the destination based on current data availability." />
+
                 {dailyWeather.length === 0 ? (
                   <Text style={styles.weatherEmptyText}>
                     Weather data is not available right now for the selected destination/date.
@@ -1079,12 +1114,6 @@ export default function GenerateItineraryScreen() {
                 )}
               </Card>
 
-              {selectedTransportOption ? (
-                <Card style={styles.card}>
-                  <SectionTitle label="🎟️ Book Selected Transport" />
-                  {renderTransportBookingSection()}
-                </Card>
-              ) : null}
 
               {/* Festivals & events — today/upcoming only; tap to open full post in modal */}
               <Card style={styles.card}>
@@ -1140,67 +1169,7 @@ export default function GenerateItineraryScreen() {
                 )}
               </Card>
 
-              {/* Day-by-day plan */}
-              {itinerary.days.map((day) => {
-                const isExpanded = expandedDays[day.day_number] ?? true;
-                return (
-                  <Card key={day.day_number} style={styles.card}>
-                    <TouchableOpacity
-                      style={styles.dayHeaderRow}
-                      activeOpacity={0.8}
-                      onPress={() =>
-                        setExpandedDays((prev) => ({ ...prev, [day.day_number]: !isExpanded }))
-                      }
-                    >
-                      <Text style={styles.dayTitle}>{day.title}</Text>
-                      <View style={styles.dayHeaderMeta}>
-                        <Text style={styles.dayActivityCount}>{day.activities.length} stops</Text>
-                        <Ionicons
-                          name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                          size={18}
-                          color={theme.colors.textSecondary}
-                        />
-                      </View>
-                    </TouchableOpacity>
-                    {isExpanded ? (
-                      <>
-                        {day.image_url ? (
-                          <TouchableOpacity
-                            activeOpacity={0.85}
-                            onPress={() => Linking.openURL(day.image_url!)}
-                          >
-                            <Image
-                              source={{ uri: day.image_url }}
-                              style={styles.dayImage}
-                              resizeMode="cover"
-                            />
-                            <Text style={styles.tapHint}>Tap image to view full size</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                        <Text style={styles.dayHotel}>🏨 Staying at: {day.hotel}</Text>
-                        {day.activities.map((act, i) => {
-                          const mapsUrl = getActivityMapUrl(act, i, day.activity_locations);
-                          return (
-                            <View key={i} style={styles.activityRow}>
-                              <Text style={styles.activityBullet}>•</Text>
-                              <Text style={[styles.activityText, { flex: 1 }]}>{act}</Text>
-                              <TouchableOpacity
-                                style={styles.mapBtn}
-                                onPress={() => Linking.openURL(mapsUrl)}
-                                activeOpacity={0.7}
-                              >
-                                <Ionicons name="location" size={16} color={GREEN} />
-                              </TouchableOpacity>
-                            </View>
-                          );
-                        })}
-                      </>
-                    ) : (
-                      <Text style={styles.dayCollapsedText}>Tap to expand day details.</Text>
-                    )}
-                  </Card>
-                );
-              })}
+
 
               <View style={{ height: 90 }} />
             </>

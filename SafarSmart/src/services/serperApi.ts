@@ -5,7 +5,12 @@
 import axios from 'axios';
 
 const SERPER_BASE = 'https://google.serper.dev';
-const API_KEY = process.env.EXPO_PUBLIC_SERPER_API_KEY || '9bda64eb7b539376dc35ed611d101cf5d62ec465';
+
+import Constants from 'expo-constants';
+
+const API_KEY =
+  Constants.expoConfig?.extra?.EXPO_PUBLIC_SERPER_API_KEY ||
+  '9bda64eb7b539376dc35ed611d101cf5d62ec465';
 
 const headers = {
   'X-API-KEY': API_KEY,
@@ -81,54 +86,121 @@ export async function fetchReviewsForPlace(placeName: string, destinationCity?: 
  * Gracefully returns empty array on failure or no data.
  */
 /** Parse date from snippet/title or ISO string; return null if not parseable. */
+
+
+/* ─────────────────────────────────────────────────────────────
+   DATE PARSER (STRICT - NO GUESSING)
+──────────────────────────────────────────────────────────── */
+
 function parseEventDate(item: { date?: string; snippet?: string; title?: string }): Date | null {
-  if (item.date) {
-    const d = new Date(item.date);
-    if (!Number.isNaN(d.getTime())) return d;
-  }
-  const text = [item.snippet, item.title].filter(Boolean).join(' ');
+  const text = [item.date, item.snippet, item.title]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  if (!text) return null;
+
+  // ISO: 2026-05-12
   const isoMatch = text.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
-  if (isoMatch) return new Date(isoMatch[0]);
-  const dmyMatch = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})\b/);
-  if (dmyMatch) return new Date(Number(dmyMatch[3]), Number(dmyMatch[2]) - 1, Number(dmyMatch[1]));
-  const monthMatch = text.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s*(20\d{2})?\b/i);
-  if (monthMatch) {
-    const y = monthMatch[3] ? Number(monthMatch[3]) : new Date().getFullYear();
-    const m = new Date(monthMatch[1] + ' 1, ' + y).getMonth();
-    const day = Number(monthMatch[2]);
-    if (!Number.isNaN(m) && !Number.isNaN(day)) return new Date(y, m, day);
+  if (isoMatch) {
+    const d = new Date(isoMatch[0]);
+    return Number.isNaN(d.getTime()) ? null : d;
   }
+
+  // DMY: 12/05/2026
+  const dmyMatch = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2})\b/);
+  if (dmyMatch) {
+    const d = new Date(
+      Number(dmyMatch[3]),
+      Number(dmyMatch[2]) - 1,
+      Number(dmyMatch[1])
+    );
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  // Month format: May 12, 2026
+  const monthMatch = text.match(
+    /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s*(20\d{2})?\b/i
+  );
+
+  if (monthMatch) {
+    const year = monthMatch[3] ? Number(monthMatch[3]) : new Date().getFullYear();
+    const monthIndex = new Date(`${monthMatch[1]} 1, 2000`).getMonth();
+    const day = Number(monthMatch[2]);
+
+    const d = new Date(year, monthIndex, day);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
   return null;
 }
 
-/** Filter organic results to only include events that haven't passed (today or future). */
-export function filterEventsToUpcomingOnly(organic: SerperSearchResult['organic'], todayStart: Date = new Date()): SerperSearchResult['organic'] {
-  const start = new Date(todayStart.getFullYear(), todayStart.getMonth(), todayStart.getDate());
-  if (!organic?.length) return organic ?? [];
+/* ─────────────────────────────────────────────────────────────
+   FILTER (TRIP-AWARE - CORE FIX)
+──────────────────────────────────────────────────────────── */
+
+export function filterEventsToUpcomingOnly(
+  organic: any[],
+  tripStart?: Date,
+  tripEnd?: Date,
+  today: Date = new Date()
+) {
+  if (!Array.isArray(organic)) return [];
+
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
   return organic.filter((item) => {
     const d = parseEventDate(item);
-    if (!d) return true;
-    const itemStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    return itemStart >= start;
+
+    // ❌ HARD RULE: no date = reject
+    if (!d) return false;
+
+    const eventDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+    // ✅ If trip window exists → STRICT overlap logic
+    if (tripStart && tripEnd) {
+      const start = new Date(tripStart);
+      const end = new Date(tripEnd);
+
+      return eventDate >= start && eventDate <= end;
+    }
+
+    // fallback → only future events
+    return eventDate >= startOfToday;
   });
 }
 
-export async function fetchEventsAndFestivals(destinationCity: string): Promise<SerperSearchResult> {
+/* ─────────────────────────────────────────────────────────────
+   EVENT FETCH (CLEAN + LESS NOISE)
+──────────────────────────────────────────────────────────── */
+
+export async function fetchEventsAndFestivals(destinationCity: string) {
   const today = new Date();
-  const y = today.getFullYear();
-  const m = today.getMonth() + 1;
-  const d = today.getDate();
-  const q = `festival events ${destinationCity} Pakistan ${y} today ${m}/${d}`;
+  const year = today.getFullYear();
+
+  // cleaner query → reduces outdated festival spam
+  const q = `upcoming events festivals ${destinationCity} Pakistan ${year} official schedule`;
+
   try {
-    const res = await axios.post<{ organic?: SerperSearchResult['organic']; knowledgeGraph?: SerperSearchResult['knowledgeGraph'] }>(
+    const res = await axios.post(
       `${SERPER_BASE}/search`,
       { q, num: 10 },
-      { headers, timeout: 10000 }
+      {
+        headers,
+        timeout: 10000,
+      }
     );
+
     const data = res.data;
-    if (data?.organic && Array.isArray(data.organic)) return { organic: data.organic, knowledgeGraph: data.knowledgeGraph };
-    return { organic: [] };
+
+    return {
+      organic: Array.isArray(data?.organic) ? data.organic : [],
+      knowledgeGraph: data?.knowledgeGraph ?? null,
+    };
   } catch (e) {
-    return { organic: [], error: axios.isAxiosError(e) ? e.message : 'Failed to fetch events' };
+    return {
+      organic: [],
+      error: axios.isAxiosError(e) ? e.message : 'Failed to fetch events',
+    };
   }
 }

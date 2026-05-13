@@ -43,7 +43,7 @@ export default function SplashScreen() {
       >
         <View style={styles.logoBackground}>
           <Image
-            source={require('../assets/images/logo.png')}
+            source={require('../assets/images/app logo.jpeg')}
             style={styles.logo}
             resizeMode="contain"
           />

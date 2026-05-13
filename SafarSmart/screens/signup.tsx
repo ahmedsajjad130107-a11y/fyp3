@@ -85,7 +85,7 @@ const Signup: React.FC = () => {
 
           <View style={styles.heroLogoWrapper}>
             <Image
-              source={require('../assets/images/logo.png')}
+              source={require('../assets/images/app logo.jpeg')}
               style={styles.heroLogo}
               resizeMode="contain"
             />

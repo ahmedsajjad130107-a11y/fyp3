@@ -27,11 +27,72 @@ const FEATURED_DESTINATIONS = [
   { city: 'Murree', icon: '🌲', color: '#558B2F', sub: 'Hill Station' },
 ];
 
-const QUICK_TIPS = [
-  { icon: 'compass-outline' as const, text: 'Best time to visit northern Pakistan: May–September' },
-  { icon: 'wallet-outline' as const, text: 'Budget trips from PKR 15,000 per person' },
-  { icon: 'shield-checkmark-outline' as const, text: 'All destinations are verified & safe' },
+const ALL_TRAVEL_TIPS = [
+  {
+    icon: 'map-outline' as const,
+    text: 'Plan routes and hotel bookings ahead during peak seasons'
+  },
+  {
+    icon: 'battery-charging-outline' as const,
+    text: 'Carry a power bank and offline maps for remote areas'
+  },
+  {
+    icon: 'cloud-outline' as const,
+    text: 'Weather in northern areas can change rapidly, pack accordingly'
+  },
+  {
+    icon: 'cash-outline' as const,
+    text: 'Keep some cash with you when traveling outside major cities'
+  },
+  {
+    icon: 'car-outline' as const,
+    text: 'Check road conditions before starting long journeys'
+  },
+  {
+    icon: 'water-outline' as const,
+    text: 'Stay hydrated during road trips and outdoor activities'
+  },
+  {
+    icon: 'time-outline' as const,
+    text: 'Start mountain travel early in the morning for safer driving'
+  },
+  {
+    icon: 'shield-checkmark-outline' as const,
+    text: 'Share your travel itinerary with family or friends'
+  },
+  {
+    icon: 'sunny-outline' as const,
+    text: 'Use sunscreen and sunglasses during daytime travel'
+  },
+  {
+    icon: 'bed-outline' as const,
+    text: 'Confirm hotel reservations before arriving at your destination'
+  },
+  {
+    icon: 'wifi-outline' as const,
+    text: 'Download maps and important documents for offline access'
+  },
+  {
+    icon: 'restaurant-outline' as const,
+    text: 'Try local food from clean and well-reviewed places'
+  },
+  {
+    icon: 'medical-outline' as const,
+    text: 'Carry basic medicines and a first aid kit while traveling'
+  },
+  {
+    icon: 'bag-outline' as const,
+    text: 'Pack light but keep essential travel items easily accessible'
+  },
+  {
+    icon: 'moon-outline' as const,
+    text: 'Avoid unfamiliar roads late at night in remote areas'
+  },
 ];
+
+const QUICK_TIPS = [...ALL_TRAVEL_TIPS]
+  .sort(() => 0.5 - Math.random())
+  .slice(0, 3);
 
 export default function DashboardScreen() {
   const navigation = useNavigation();
@@ -66,7 +127,7 @@ export default function DashboardScreen() {
         <View style={styles.headerRow}>
           <View style={styles.logoRow}>
             <Image
-              source={require('../assets/images/logo.png')}
+              source={require('../assets/images/app logo.jpeg')}
               style={styles.headerLogo}
               resizeMode="contain"
             />

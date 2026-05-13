@@ -37,7 +37,7 @@ export const FloatingChatBot: React.FC<FloatingChatBotProps> = ({ itineraryData,
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [language, setLanguage] = useState<'en' | 'ur'>('en'); // Language toggle
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollView>(null); 
 
   // Initialize with welcome message and reset when language changes
   useEffect(() => {

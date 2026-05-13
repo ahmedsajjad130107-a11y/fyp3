@@ -350,72 +350,107 @@ def get_transport_options(
     num_travelers: int,
 ) -> List[TransportOption]:
     """
-    Calculate transport options mathematically using DISTANCE_MAP and TRANSPORT_RATES.
-    NO LLM is used here.
-    Car rental is flat per vehicle (not × num_travelers).
-    Flights only for routes ≥ 300 km.
+    Clean transport planner:
+    - ONE option per mode (train, bus, car, flight)
+    - No provider duplication
+    - Car is per vehicle (not per person transport)
+    - Flights only for long routes
     """
-    distance_km = _lookup_distance(origin, destination)
-    options: List[TransportOption] = []
 
+    distance_km = _lookup_distance(origin, destination)
+
+    train_fares = []
+    bus_fares = []
+    car_fares = []
+    flight_fares = []
+
+    # ── STEP 1: COLLECT ALL MODE TARIFFS ────────────────────────────────
     for mode_name, (rate_min, rate_max) in TRANSPORT_RATES.items():
-        # Skip flights for short routes
-        if "Flight" in mode_name and distance_km < FLIGHT_MIN_KM:
+
+        mode = mode_name.split()[0].lower()
+        mid_rate = (rate_min + rate_max) / 2
+        base_cost = distance_km * mid_rate
+
+        # Flight rules
+        if "flight" in mode:
+            if distance_km < FLIGHT_MIN_KM:
+                continue
+            base_cost += FLIGHT_BASE_FARE
+            flight_fares.append(base_cost)
             continue
 
-        mid_rate = (rate_min + rate_max) / 2
-        base_cost = round(distance_km * mid_rate, 2)
+        # Group by mode
+        if mode == "train":
+            train_fares.append(base_cost)
+        elif mode == "bus":
+            bus_fares.append(base_cost)
+        elif mode == "car":
+            car_fares.append(base_cost)
 
-        # Add base fare for flights (fixed cost per ticket)
-        is_flight = "Flight" in mode_name
-        if is_flight:
-            base_cost = round(base_cost + FLIGHT_BASE_FARE, 2)
+    options: List[TransportOption] = []
 
-        is_car = "Car" in mode_name
-
-        if is_car:
-            # Car rental: flat price per vehicle, not per person
-            total = round(base_cost, 2)
-            # price_per_person is informational (divide total by travelers)
-            ppp = round(total / max(1, num_travelers), 2)
-            provider_note = "per vehicle"
-        else:
-            # Per-person transport
-            ppp = round(base_cost, 2)
-            total = round(base_cost * num_travelers, 2)
-            provider_note = ""
-
-        # Duration
-        speed = TRANSPORT_SPEEDS_KPH.get(mode_name)
-        if mode_name == "Flight Economy":
-            duration = _flight_duration(distance_km)
-        elif speed:
-            duration = _format_duration(distance_km / speed)
-        else:
-            duration = "Varies"
-
-        # Nice provider names
-        provider_map = {
-            "Train Economy": "Pakistan Railways (Economy)",
-            "Bus Economy": "Faisal Movers / Niazi Express",
-            "Bus Business": "Daewoo Express / Gold Class",
-            "Train AC Business": "Pakistan Railways (AC Business)",
-            "Flight Economy": "PIA / Airblue / Serene Air",
-            "Car Sedan + Driver": f"Rent-a-Car Sedan ({provider_note})",
-            "Car SUV + Driver": f"Rent-a-Car SUV ({provider_note})",
-        }
+    # ── TRAIN (single consolidated option) ──────────────────────────────
+    if train_fares:
+        best = min(train_fares)
 
         options.append(TransportOption(
-            type=mode_name.split()[0].lower(),  # 'train', 'bus', 'flight', 'car'
-            provider=provider_map.get(mode_name, mode_name),
-            price_per_person=ppp,
-            total_price=total,
-            duration=duration,
+            type="train",
+            provider="Pakistan Railways",
+            price_per_person=round(best, 2),
+            total_price=round(best * num_travelers, 2),
+            duration=_format_duration(distance_km / TRANSPORT_SPEEDS_KPH.get("Train Economy", 60)),
             distance_km=round(distance_km, 1),
         ))
 
-    # Sort cheapest total first
+    # ── BUS (single consolidated option) ────────────────────────────────
+    if bus_fares:
+        best = min(bus_fares)
+
+        options.append(TransportOption(
+            type="bus",
+            provider="Intercity Bus Service",
+            price_per_person=round(best, 2),
+            total_price=round(best * num_travelers, 2),
+            duration=_format_duration(distance_km / TRANSPORT_SPEEDS_KPH.get("Bus Economy", 50)),
+            distance_km=round(distance_km, 1),
+        ))
+
+    # ── CAR (vehicle-based pricing) ──────────────────────────────────────
+    if car_fares:
+        best = min(car_fares)
+
+        options.append(TransportOption(
+            type="car",
+            provider="Private Car (Up to 4 persons, full vehicle)",
+
+            # FIX: do NOT divide in a way that affects logic
+            price_per_person=round(best / 4, 2),  # fixed capacity assumption
+
+            total_price=round(best, 2),
+
+            duration=_format_duration(
+                distance_km / TRANSPORT_SPEEDS_KPH.get("Car Sedan + Driver", 70)
+            ),
+
+            distance_km=round(distance_km, 1),
+        ))
+
+    # ── FLIGHT (only if valid) ───────────────────────────────────────────
+    if flight_fares:
+        best = min(flight_fares)
+
+        options.append(TransportOption(
+            type="flight",
+            provider="PIA / Airblue / Serene Air",
+            price_per_person=round(best, 2),
+            total_price=round(best * num_travelers, 2),
+            duration=_flight_duration(distance_km),
+            distance_km=round(distance_km, 1),
+        ))
+
+    # ── SORT BY TOTAL COST ───────────────────────────────────────────────
     options.sort(key=lambda o: o.total_price)
+
     return options
 
 

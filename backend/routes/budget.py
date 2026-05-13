@@ -249,49 +249,68 @@ class BudgetResponse(BaseModel):
 # ── Calculation functions ─────────────────────────────────────────────────────
 
 def _calc_hotels(
-    city: str, budget_level: str, num_nights: int, num_people: int,
+    city: str,
+    budget_level: str,
+    num_nights: int,
+    num_people: int,
     is_peak: bool
 ) -> tuple[List[HotelOption], HotelOption]:
 
-    raw_hotels  = _get_hotels_for_city(city, budget_level)
-    terrain     = _terrain_mult(city)
-    season      = _season_mult(is_peak)
-    occupancy   = _occupancy_mult()
-    num_rooms   = max(1, math.ceil(num_people / 2))
+    raw_hotels = _get_hotels_for_city(city, budget_level)
+
+    season = _season_mult(is_peak)
+
     options: List[HotelOption] = []
 
+    fallback_prices = {
+        "low": 2500,
+        "medium": 9000,
+        "high": 28000
+    }
+
     for h in raw_hotels:
-        base   = h["price_per_night"]
-        if base <= 0:
-            # Use fallback pricing if missing
-            fallback_prices = {"low": 2500, "medium": 9000, "high": 28000}
+
+        base = h.get("price_per_night", 0)
+
+        if not base or base <= 0:
             base = fallback_prices.get(budget_level, 9000)
 
-        nightly = base * terrain * season * occupancy
-        total   = nightly * num_nights * num_rooms
+        # per person per night (your new model)
+        price_per_person_per_night = base * season
+
+        # TOTAL = per person × nights × travellers
+        total = price_per_person_per_night * num_nights * num_people
+
         options.append(HotelOption(
-            name            = h["name"],
-            price_per_night = round(nightly, 0),
-            price_total     = round(total, 0),
-            price_per_person= round(total / max(num_people, 1), 0),
-            tier            = budget_level,
-            is_peak_priced  = is_peak,
+            name=h.get("name", "Hotel"),
+            price_per_night=round(price_per_person_per_night, 0),
+            price_total=round(total, 0),
+            price_per_person=round(price_per_person_per_night * num_nights, 0),
+            tier=budget_level,
+            is_peak_priced=is_peak,
         ))
 
     if not options:
-        # Absolute fallback
-        base  = {"low": 2500, "medium": 9000, "high": 28000}[budget_level]
-        total = base * num_nights * math.ceil(num_people / 2)
-        opt   = HotelOption(
-            name="Standard Hotel", price_per_night=base,
-            price_total=total, price_per_person=total // max(num_people, 1),
-            tier=budget_level, is_peak_priced=is_peak,
-        )
-        options = [opt]
 
-    # Recommended = median price option
-    options.sort(key=lambda x: x.price_per_night)
+        base = fallback_prices.get(budget_level, 9000)
+
+        price_per_person_per_night = base * season
+        total = price_per_person_per_night * num_nights * num_people
+
+        options = [
+            HotelOption(
+                name="Standard Hotel",
+                price_per_night=round(price_per_person_per_night, 0),
+                price_total=round(total, 0),
+                price_per_person=round(price_per_person_per_night * num_nights, 0),
+                tier=budget_level,
+                is_peak_priced=is_peak,
+            )
+        ]
+
+    options.sort(key=lambda x: x.price_total)
     recommended = options[len(options) // 2]
+
     return options, recommended
 
 

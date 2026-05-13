@@ -13,45 +13,75 @@ interface MarkdownTextProps {
 
 /**
  * Simple markdown parser for React Native
- * Handles: **bold**, *italic*, `code`, [links](url), and line breaks
+ * Handles:
+ * - # Headings
+ * - **bold**
+ * - *italic*
+ * - `code`
+ * - [links](url)
+ * - line breaks
  */
-export const MarkdownText: React.FC<MarkdownTextProps> = ({ 
-  content, 
+export const MarkdownText: React.FC<MarkdownTextProps> = ({
+  content,
   style,
-  textStyle 
+  textStyle,
 }) => {
-  const parseMarkdown = (text: string, baseKey: number): React.ReactNode[] => {
+  const parseMarkdown = (
+    text: string,
+    baseKey: number
+  ): React.ReactNode[] => {
     if (!text) return [];
 
     const parts: React.ReactNode[] = [];
     let currentIndex = 0;
     let key = baseKey;
 
-    // Regex patterns for markdown elements
+    // Markdown patterns
     const patterns = [
+      // H3 Heading
+      {
+        regex: /^###\s+(.+)$/,
+        type: 'h3',
+      },
+
+      // H2 Heading
+      {
+        regex: /^##\s+(.+)$/,
+        type: 'h2',
+      },
+
+      // H1 Heading
+      {
+        regex: /^#\s+(.+)$/,
+        type: 'h1',
+      },
+
       // Links: [text](url)
-      { 
-        regex: /\[([^\]]+)\]\(([^)]+)\)/g, 
-        type: 'link' 
+      {
+        regex: /\[([^\]]+)\]\(([^)]+)\)/g,
+        type: 'link',
       },
+
       // Bold: **text**
-      { 
-        regex: /\*\*([^*]+)\*\*/g, 
-        type: 'bold' 
+      {
+        regex: /\*\*([^*]+)\*\*/g,
+        type: 'bold',
       },
-      // Italic: *text* (but not **text**)
-      { 
-        regex: /(?<!\*)\*([^*]+)\*(?!\*)/g, 
-        type: 'italic' 
+
+      // Italic: *text*
+      {
+        regex: /(?<!\*)\*([^*]+)\*(?!\*)/g,
+        type: 'italic',
       },
+
       // Code: `text`
-      { 
-        regex: /`([^`]+)`/g, 
-        type: 'code' 
+      {
+        regex: /`([^`]+)`/g,
+        type: 'code',
       },
     ];
 
-    // Find all matches with their positions
+    // Find all matches
     const matches: Array<{
       start: number;
       end: number;
@@ -61,8 +91,15 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
     }> = [];
 
     patterns.forEach(({ regex, type }) => {
+      const flags = regex.flags.includes('g')
+        ? regex.flags
+        : `${regex.flags}g`;
+
+      const globalRegex = new RegExp(regex.source, flags);
+
       let match;
-      while ((match = regex.exec(text)) !== null) {
+
+      while ((match = globalRegex.exec(text)) !== null) {
         matches.push({
           start: match.index,
           end: match.index + match[0].length,
@@ -76,9 +113,10 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
     // Sort matches by position
     matches.sort((a, b) => a.start - b.start);
 
-    // Remove overlapping matches (prioritize first match)
+    // Remove overlaps
     const filteredMatches: typeof matches = [];
     let lastEnd = 0;
+
     matches.forEach((match) => {
       if (match.start >= lastEnd) {
         filteredMatches.push(match);
@@ -86,11 +124,12 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
       }
     });
 
-    // Build parts array
+    // Build output
     filteredMatches.forEach((match) => {
-      // Add text before match
+      // Add plain text before match
       if (match.start > currentIndex) {
         const beforeText = text.substring(currentIndex, match.start);
+
         if (beforeText) {
           parts.push(
             <Text key={`text-${key++}`} style={textStyle}>
@@ -100,8 +139,32 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
         }
       }
 
-      // Add formatted match
+      // Add formatted content
       switch (match.type) {
+        case 'h1':
+          parts.push(
+            <Text key={`h1-${key++}`} style={[textStyle, styles.h1]}>
+              {match.content}
+            </Text>
+          );
+          break;
+
+        case 'h2':
+          parts.push(
+            <Text key={`h2-${key++}`} style={[textStyle, styles.h2]}>
+              {match.content}
+            </Text>
+          );
+          break;
+
+        case 'h3':
+          parts.push(
+            <Text key={`h3-${key++}`} style={[textStyle, styles.h3]}>
+              {match.content}
+            </Text>
+          );
+          break;
+
         case 'bold':
           parts.push(
             <Text key={`bold-${key++}`} style={[textStyle, styles.bold]}>
@@ -109,6 +172,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
             </Text>
           );
           break;
+
         case 'italic':
           parts.push(
             <Text key={`italic-${key++}`} style={[textStyle, styles.italic]}>
@@ -116,6 +180,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
             </Text>
           );
           break;
+
         case 'code':
           parts.push(
             <Text key={`code-${key++}`} style={[textStyle, styles.code]}>
@@ -123,6 +188,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
             </Text>
           );
           break;
+
         case 'link':
           parts.push(
             <Text
@@ -145,9 +211,10 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
       currentIndex = match.end;
     });
 
-    // Add remaining text
+    // Remaining plain text
     if (currentIndex < text.length) {
       const remainingText = text.substring(currentIndex);
+
       if (remainingText) {
         parts.push(
           <Text key={`text-${key++}`} style={textStyle}>
@@ -157,7 +224,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
       }
     }
 
-    // If no matches found, return plain text
+    // No markdown found
     if (parts.length === 0) {
       return [
         <Text key={`text-${key}`} style={textStyle}>
@@ -169,24 +236,30 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
     return parts;
   };
 
-  // Split by line breaks and process each line
+  // Split lines
   const lines = content.split('\n');
+
   const processedLines: React.ReactNode[] = [];
+
   let globalKey = globalKeyCounter;
 
   lines.forEach((line, index) => {
     if (line.trim()) {
       const parsed = parseMarkdown(line, globalKey);
+
       globalKey += parsed.length;
+
       processedLines.push(...parsed);
     }
-    // Add line break (except for last line)
+
+    // Line break
     if (index < lines.length - 1) {
-      processedLines.push(<Text key={`br-${globalKey++}`}>{'\n'}</Text>);
+      processedLines.push(
+        <Text key={`br-${globalKey++}`}>{'\n'}</Text>
+      );
     }
   });
 
-  // Update global counter
   globalKeyCounter = globalKey;
 
   return (
@@ -197,12 +270,35 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
 };
 
 const styles = StyleSheet.create({
+  h1: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    marginVertical: 8,
+  },
+
+  h2: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    marginVertical: 6,
+  },
+
+  h3: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    marginVertical: 4,
+  },
+
   bold: {
     fontWeight: '700',
   },
+
   italic: {
     fontStyle: 'italic',
   },
+
   code: {
     fontFamily: 'monospace',
     backgroundColor: theme.colors.surface,
@@ -211,6 +307,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     fontSize: 14,
   },
+
   link: {
     color: theme.colors.primary,
     textDecorationLine: 'underline',
@@ -218,4 +315,3 @@ const styles = StyleSheet.create({
 });
 
 export default MarkdownText;
-
