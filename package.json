@@ -1,0 +1,10 @@
+{
+  "name": "smart-itinerary",
+  "private": true,
+  "description": "Monorepo root — app lives in SafarSmart/",
+  "scripts": {
+    "start": "npm start --prefix SafarSmart",
+    "build:apk": "npm run build:apk --prefix SafarSmart",
+    "build:android:store": "npm run build:android:store --prefix SafarSmart"
+  }
+}
