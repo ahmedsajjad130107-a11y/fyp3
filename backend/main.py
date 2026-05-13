@@ -8,6 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 # Initialize the FastAPI app
 app = FastAPI()  # Core application that will handle all requests
 
+
+@app.get("/health")
+async def health():
+    """Lightweight probe for load balancers (Railway, etc.)."""
+    return {"status": "ok"}
+
 # Configure CORS to allow requests from mobile app and ngrok
 app.add_middleware(
     CORSMiddleware,
